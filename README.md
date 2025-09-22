@@ -13,7 +13,8 @@ This led me to the idea of building my own **Go proxy** that caches responses fr
 These was my requirements for Astera
 - Support Go proxy protocol (without sumdb). The `go mod tidy` and `go get -u ./...` had to work.
 - Private repository support but limited to Git.
-- Handle high load ;) by high load I mean 30-40 `go mod tidy` runs in parallel on Raspberry Pi 5
+- Handle high load ;) by high load I mean 30-40 `go mod tidy` runs in parallels on dev machines
+- Astera will be hosted on RaspberryPi 5 8GB Ram.
 
 The initial implementation works but fail under high load because there were a lot of redundant requests to sqlite which created a massive IO pressure on the system. The whole Raspberr Pi 5 was unresponsive.
 
