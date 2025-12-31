@@ -59,13 +59,13 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.cache.Query(r.Context(), r.URL.Path)
 	if err != nil {
-		slog.Error(err.Error(), "query failed", r.URL.Path)
 		if errors.Is(err, astera.ErrModuleNotFound) {
 			http.Error(w, astera.ErrModuleNotFound.Error(), http.StatusNotFound)
 			return
 		}
 
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.Error("query failed", "path", r.URL.Path, "err", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
