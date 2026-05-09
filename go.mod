@@ -1,11 +1,11 @@
 module astera
 
-go 1.25.1
+go 1.26.2
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/stretchr/testify v1.11.0
-	github.com/tmwalaszek/weakcache v1.2.0
+	github.com/tmwalaszek/weakcache v1.1.0
 	golang.org/x/mod v0.31.0
 )
 

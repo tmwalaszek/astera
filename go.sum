@@ -10,8 +10,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.11.0 h1:ib4sjIrwZKxE5u/Japgo/7SJV3PvgjGiRNAvTVGqQl8=
 github.com/stretchr/testify v1.11.0/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/tmwalaszek/weakcache v1.2.0 h1:2gnazA35wJ+1OE5/N7u/uaW6jizusmRaGjxZjYEeI7E=
-github.com/tmwalaszek/weakcache v1.2.0/go.mod h1:6LaW/pJWojMj3TqxV9yOBB4b+7Xi2Kok460nASUjQSw=
+github.com/tmwalaszek/weakcache v1.1.0 h1:jfZZfYuFcNfqDuWCwyLHtrz/9+HkCvjHvZumumPoFZA=
+github.com/tmwalaszek/weakcache v1.1.0/go.mod h1:mYBvWyRluO5aPl6E3HW2BYvQeveAFkmtiho1HjBLGSQ=
 golang.org/x/mod v0.31.0 h1:HaW9xtz0+kOcWKwli0ZXy79Ix+UW/vOfmWI5QVd2tgI=
 golang.org/x/mod v0.31.0/go.mod h1:43JraMp9cGx1Rx3AqioxrbrhNsLl2l/iNAvuBkrezpg=
 golang.org/x/tools v0.39.0 h1:ik4ho21kwuQln40uelmciQPp9SipgNDdrafrYA4TmQQ=
