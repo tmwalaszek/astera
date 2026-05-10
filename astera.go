@@ -11,6 +11,18 @@ var (
 	ErrInvalidResource     = errors.New("invalid resource")
 )
 
+type QueryOpts struct {
+	CachedOnly bool
+}
+
+type QueryOption func(*QueryOpts)
+
+func WithCachedOnly() QueryOption {
+	return func(o *QueryOpts) {
+		o.CachedOnly = true
+	}
+}
+
 type Module struct {
 	Name string
 
@@ -48,7 +60,7 @@ type ModuleRepository interface {
 
 type GoProxyService interface {
 	ImportCachedModules(dir string) error
-	Query(context.Context, string) ([]byte, error)
+	Query(ctx context.Context, query string, opts ...QueryOption) ([]byte, error)
 }
 
 type VCS interface {

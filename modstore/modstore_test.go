@@ -262,6 +262,224 @@ func TestQueryList(t *testing.T) {
 	}
 }
 
+func TestQueryCachedOnlyLatest(t *testing.T) {
+	t.Parallel()
+
+	const (
+		latestInfo = `{"Version":"v1.2.0","Time":"2025-09-12T21:00:38Z"}`
+	)
+
+	failingTransport := mockRoundTripper(func(req *http.Request) *http.Response {
+		t.Fatalf("goproxy must not be called in cached-only mode, got %s", req.URL.String())
+		return nil
+	})
+
+	tt := []struct {
+		name     string
+		module   string
+		versions []string
+		listErr  error
+		infoErr  error
+		wantErr  error
+		wantBody string
+	}{
+		{
+			name:     "highest semver from cache",
+			module:   "github.com/tmwalaszek/module1",
+			versions: []string{"v1.0.0", "v1.2.0", "v1.1.0"},
+			wantBody: latestInfo,
+		},
+		{
+			name:     "empty version list returns module not found",
+			module:   "github.com/tmwalaszek/module2",
+			versions: []string{},
+			wantErr:  astera.ErrModuleNotFound,
+		},
+		{
+			name:     "missing info bubbles up",
+			module:   "github.com/tmwalaszek/module3",
+			versions: []string{"v1.0.0"},
+			infoErr:  astera.ErrModuleNotFound,
+			wantErr:  astera.ErrModuleNotFound,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			repositoryMock := &mock.Repository{
+				GetVersionListFn: func(string) ([]string, error) {
+					if tc.listErr != nil {
+						return nil, tc.listErr
+					}
+					return tc.versions, nil
+				},
+				GetVersionInfoFn: func(_, version string) ([]byte, error) {
+					if tc.infoErr != nil {
+						return nil, tc.infoErr
+					}
+					if version != "v1.2.0" {
+						t.Fatalf("expected highest semver v1.2.0, got %s", version)
+					}
+					return []byte(latestInfo), nil
+				},
+			}
+			vcsMock := &mock.VCS{
+				FetchTagsFn: func(string) ([]string, error) {
+					t.Fatal("vcs.FetchTags must not be called in cached-only mode")
+					return nil, nil
+				},
+			}
+
+			proxyCache := &ModuleStore{
+				goProxyClient:    &GoProxyClient{client: &http.Client{Transport: failingTransport}},
+				moduleRepository: repositoryMock,
+				vcs:              vcsMock,
+				weakCache:        weakcache.NewWeakCache[[]byte](),
+			}
+
+			body, err := proxyCache.Query(context.Background(), "/"+tc.module+"/@latest", astera.WithCachedOnly())
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantBody, string(body))
+		})
+	}
+}
+
+func TestQueryCachedOnlyInfoModZip(t *testing.T) {
+	t.Parallel()
+
+	failingTransport := mockRoundTripper(func(req *http.Request) *http.Response {
+		t.Fatalf("goproxy must not be called in cached-only mode, got %s", req.URL.String())
+		return nil
+	})
+
+	tt := []struct {
+		name    string
+		query   string
+		dbErr   error
+		body    []byte
+		wantErr error
+	}{
+		{
+			name:  "info served from cache",
+			query: "/github.com/tmwalaszek/module1/@v/v1.0.0.info",
+			body:  []byte("info content"),
+		},
+		{
+			name:  "mod served from cache",
+			query: "/github.com/tmwalaszek/module1/@v/v1.0.0.mod",
+			body:  []byte("mod content"),
+		},
+		{
+			name:  "zip served from cache",
+			query: "/github.com/tmwalaszek/module1/@v/v1.0.0.zip",
+			body:  []byte("zip content"),
+		},
+		{
+			name:    "info miss does not fall back",
+			query:   "/github.com/tmwalaszek/module2/@v/v1.0.0.info",
+			dbErr:   astera.ErrModuleNotFound,
+			wantErr: astera.ErrModuleNotFound,
+		},
+		{
+			name:    "mod miss does not fall back",
+			query:   "/github.com/tmwalaszek/module2/@v/v1.0.0.mod",
+			dbErr:   astera.ErrModuleNotFound,
+			wantErr: astera.ErrModuleNotFound,
+		},
+		{
+			name:    "zip miss does not fall back",
+			query:   "/github.com/tmwalaszek/module2/@v/v1.0.0.zip",
+			dbErr:   astera.ErrModuleNotFound,
+			wantErr: astera.ErrModuleNotFound,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			repositoryMock := &mock.Repository{
+				GetVersionInfoFn: func(string, string) ([]byte, error) {
+					if tc.dbErr != nil {
+						return nil, tc.dbErr
+					}
+					return tc.body, nil
+				},
+				GetModFileFn: func(string, string) ([]byte, error) {
+					if tc.dbErr != nil {
+						return nil, tc.dbErr
+					}
+					return tc.body, nil
+				},
+				GetModuleZipFn: func(string, string) ([]byte, error) {
+					if tc.dbErr != nil {
+						return nil, tc.dbErr
+					}
+					return tc.body, nil
+				},
+				ModuleExistsFn: func(string, string) (bool, error) {
+					t.Fatal("ModuleExists must not be called in cached-only mode")
+					return false, nil
+				},
+				InsertModuleFn: func(*astera.Module) error {
+					t.Fatal("InsertModule must not be called in cached-only mode")
+					return nil
+				},
+			}
+			vcsMock := &mock.VCS{
+				CloneFn: func(string, string) (*astera.Module, error) {
+					t.Fatal("vcs.Clone must not be called in cached-only mode")
+					return nil, nil
+				},
+			}
+
+			proxyCache := &ModuleStore{
+				goProxyClient:    &GoProxyClient{client: &http.Client{Transport: failingTransport}},
+				moduleRepository: repositoryMock,
+				vcs:              vcsMock,
+				weakCache:        weakcache.NewWeakCache[[]byte](),
+			}
+
+			got, err := proxyCache.Query(context.Background(), tc.query, astera.WithCachedOnly())
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.body, got)
+		})
+	}
+}
+
+func TestQueryCachedOnlyListSkipsVCS(t *testing.T) {
+	t.Parallel()
+
+	repositoryMock := &mock.Repository{
+		GetVersionListFn: func(string) ([]string, error) {
+			return []string{"v1.0.0", "v1.0.1"}, nil
+		},
+	}
+	vcsMock := &mock.VCS{
+		FetchTagsFn: func(string) ([]string, error) {
+			t.Fatal("vcs.FetchTags must not be called in cached-only mode, even for goPrivate modules")
+			return nil, nil
+		},
+	}
+
+	proxyCache := &ModuleStore{
+		moduleRepository: repositoryMock,
+		vcs:              vcsMock,
+		weakCache:        weakcache.NewWeakCache[[]byte](),
+		goPrivate:        "github.com/tmwalaszek/*",
+	}
+
+	body, err := proxyCache.Query(context.Background(), "/github.com/tmwalaszek/module1/@v/list", astera.WithCachedOnly())
+	assert.NoError(t, err)
+	assert.Equal(t, "v1.0.0\nv1.0.1", string(body))
+}
+
 func TestQueryLatest(t *testing.T) {
 	t.Parallel()
 

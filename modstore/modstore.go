@@ -69,11 +69,16 @@ func (c *ModuleStore) ImportCachedModules(dir string) error {
 	return err
 }
 
-func (c *ModuleStore) Query(ctx context.Context, query string) ([]byte, error) {
+func (c *ModuleStore) Query(ctx context.Context, query string, opts ...astera.QueryOption) ([]byte, error) {
 	var resource, module string
 	var err error
 
 	var responseBody []byte
+
+	var o astera.QueryOpts
+	for _, opt := range opts {
+		opt(&o)
+	}
 
 	query = strings.TrimPrefix(query, "/")
 
@@ -100,12 +105,12 @@ func (c *ModuleStore) Query(ctx context.Context, query string) ([]byte, error) {
 	switch {
 	case resource == "list":
 		var versionLists []string
-		versionLists, err = c.queryVersionsList(module)
+		versionLists, err = c.queryVersionsList(module, o.CachedOnly)
 
 		responseBody = []byte(strings.Join(versionLists, "\n"))
 	case resource == "@latest":
 		var latest string
-		latest, err = c.queryLatest(ctx, module)
+		latest, err = c.queryLatest(ctx, module, o.CachedOnly)
 
 		responseBody = []byte(latest)
 	case strings.HasSuffix(resource, infoSuffix):
@@ -115,7 +120,7 @@ func (c *ModuleStore) Query(ctx context.Context, query string) ([]byte, error) {
 			return nil, err
 		}
 
-		responseBody, err = c.queryModuleInfo(ctx, module, ver)
+		responseBody, err = c.queryModuleInfo(ctx, module, ver, o.CachedOnly)
 	case strings.HasSuffix(resource, modSuffix):
 		ver := strings.TrimSuffix(resource, modSuffix)
 		_, err = xmod.UnescapeVersion(ver)
@@ -123,7 +128,7 @@ func (c *ModuleStore) Query(ctx context.Context, query string) ([]byte, error) {
 			return nil, err
 		}
 
-		responseBody, err = c.queryModuleMod(ctx, module, ver)
+		responseBody, err = c.queryModuleMod(ctx, module, ver, o.CachedOnly)
 	case strings.HasSuffix(resource, zipSuffix):
 		ver := strings.TrimSuffix(resource, zipSuffix)
 		_, err = xmod.UnescapeVersion(ver)
@@ -131,7 +136,7 @@ func (c *ModuleStore) Query(ctx context.Context, query string) ([]byte, error) {
 			return nil, err
 		}
 
-		responseBody, err = c.queryModuleZip(ctx, module, ver)
+		responseBody, err = c.queryModuleZip(ctx, module, ver, o.CachedOnly)
 	default:
 		return nil, fmt.Errorf("%w: query %s", astera.ErrInvalidResource, query)
 	}
@@ -212,7 +217,11 @@ func (c *ModuleStore) createModuleCache(dir, modulePath string) error {
 	return nil
 }
 
-func (c *ModuleStore) queryVersionsList(module string) ([]string, error) {
+func (c *ModuleStore) queryVersionsList(module string, cachedOnly bool) ([]string, error) {
+	if cachedOnly {
+		return c.moduleRepository.GetVersionList(module)
+	}
+
 	var versionList []string
 	var err error
 
@@ -236,7 +245,24 @@ func (c *ModuleStore) queryVersionsList(module string) ([]string, error) {
 	return versionList, nil
 }
 
-func (c *ModuleStore) queryLatest(ctx context.Context, module string) (string, error) {
+func (c *ModuleStore) queryLatest(ctx context.Context, module string, cachedOnly bool) (string, error) {
+	if cachedOnly {
+		versions, err := c.moduleRepository.GetVersionList(module)
+		if err != nil {
+			return "", err
+		}
+		if len(versions) == 0 {
+			return "", astera.ErrModuleNotFound
+		}
+
+		semver.Sort(versions)
+		info, err := c.moduleRepository.GetVersionInfo(module, versions[len(versions)-1])
+		if err != nil {
+			return "", err
+		}
+		return string(info), nil
+	}
+
 	var latest string
 
 	if xmod.MatchPrefixPatterns(c.goPrivate, module) {
@@ -264,10 +290,14 @@ func (c *ModuleStore) queryLatest(ctx context.Context, module string) (string, e
 	return latest, nil
 }
 
-func (c *ModuleStore) queryModuleInfo(ctx context.Context, module, version string) ([]byte, error) {
+func (c *ModuleStore) queryModuleInfo(ctx context.Context, module, version string, cachedOnly bool) ([]byte, error) {
 	result, err := c.queryModuleInfoCache(module, version)
 	if err == nil {
 		return result, nil
+	}
+
+	if cachedOnly {
+		return nil, err
 	}
 
 	if errors.Is(err, astera.ErrModuleNotFound) {
@@ -283,11 +313,16 @@ func (c *ModuleStore) queryModuleInfo(ctx context.Context, module, version strin
 	return nil, err
 }
 
-func (c *ModuleStore) queryModuleMod(ctx context.Context, module, version string) ([]byte, error) {
+func (c *ModuleStore) queryModuleMod(ctx context.Context, module, version string, cachedOnly bool) ([]byte, error) {
 	result, err := c.queryModuleModCache(module, version)
 	if err == nil {
 		return result, nil
 	}
+
+	if cachedOnly {
+		return nil, err
+	}
+
 	if errors.Is(err, astera.ErrModuleNotFound) {
 		err := c.fetchAndSetModule(ctx, module, version)
 		if err != nil {
@@ -300,10 +335,14 @@ func (c *ModuleStore) queryModuleMod(ctx context.Context, module, version string
 	return nil, err
 }
 
-func (c *ModuleStore) queryModuleZip(ctx context.Context, module, version string) ([]byte, error) {
+func (c *ModuleStore) queryModuleZip(ctx context.Context, module, version string, cachedOnly bool) ([]byte, error) {
 	result, err := c.queryModuleZipCache(module, version)
 	if err == nil {
 		return result, nil
+	}
+
+	if cachedOnly {
+		return nil, err
 	}
 
 	if errors.Is(err, astera.ErrModuleNotFound) {
