@@ -64,6 +64,11 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if errors.Is(err, astera.ErrInvalidResource) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
 		slog.Error("query failed", "path", r.URL.Path, "err", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
