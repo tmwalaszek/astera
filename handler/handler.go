@@ -5,11 +5,13 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
 const (
-	sumDbPath = "/sumdb/sum.golang.org/supported"
+	sumDbPath        = "/sumdb/sum.golang.org/supported"
+	cachedOnlyPrefix = "/cached-only"
 )
 
 type Handler struct {
@@ -57,7 +59,14 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.cache.Query(r.Context(), r.URL.Path)
+	path := r.URL.Path
+	var opts []astera.QueryOption
+	if strings.HasPrefix(path, cachedOnlyPrefix+"/") {
+		path = strings.TrimPrefix(path, cachedOnlyPrefix)
+		opts = append(opts, astera.WithCachedOnly())
+	}
+
+	resp, err := h.cache.Query(r.Context(), path, opts...)
 	if err != nil {
 		if errors.Is(err, astera.ErrModuleNotFound) {
 			http.Error(w, astera.ErrModuleNotFound.Error(), http.StatusNotFound)

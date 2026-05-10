@@ -1,16 +1,19 @@
 package mock
 
-import "context"
+import (
+	"astera"
+	"context"
+)
 
 type GoProxyCache struct {
 	ImportCachedModulesFn func(dir string) error
-	QueryFn               func(ctx context.Context, query string) ([]byte, error)
+	QueryFn               func(ctx context.Context, query string, opts ...astera.QueryOption) ([]byte, error)
 }
 
 func (c *GoProxyCache) ImportCachedModules(dir string) error {
 	return c.ImportCachedModulesFn(dir)
 }
 
-func (c *GoProxyCache) Query(ctx context.Context, query string) ([]byte, error) {
-	return c.QueryFn(ctx, query)
+func (c *GoProxyCache) Query(ctx context.Context, query string, opts ...astera.QueryOption) ([]byte, error) {
+	return c.QueryFn(ctx, query, opts...)
 }
